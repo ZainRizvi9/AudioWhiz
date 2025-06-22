@@ -1,5 +1,4 @@
-require('dotenv').config();
-const fetch = require('node-fetch');
+import fetch from 'node-fetch';
 
 let accessToken = null;
 let tokenExpiresAt = 0;
