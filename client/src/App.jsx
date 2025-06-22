@@ -14,13 +14,14 @@ function App() {
   const [answered, setAnswered] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
-  const [maxTime, setMaxTime] = useState(1); // Start with 1 second
+  const [maxTime, setMaxTime] = useState(1);
+  const [debugInfo, setDebugInfo] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
   
   const audioRef = useRef(null);
   const intervalRef = useRef(null);
 
-  const stageTimes = [1, 2, 4, 7, 11, 16]; // Seconds for each stage
-
+  const stageTimes = [1, 2, 4, 7, 11, 16];
 
   useEffect(() => {
     if (audioRef.current) {
@@ -49,30 +50,69 @@ function App() {
     return () => clearInterval(intervalRef.current);
   }, [isPlaying, maxTime]);
 
+  const testAPI = async () => {
+    try {
+      setDebugInfo("Testing API connection...");
+      const res = await fetch('/api/test');
+      const data = await res.json();
+      setDebugInfo(`API Test: ${JSON.stringify(data, null, 2)}`);
+    } catch (error) {
+      setDebugInfo(`API Test Error: ${error.message}`);
+    }
+  };
+
   const fetchTracks = async () => {
-    setMessage("Loading tracks from Spotify...");
+    if (!playlistUrl.trim()) {
+      setMessage("Please enter a playlist URL");
+      return;
+    }
+
+    setMessage("");
+    setDebugInfo("");
+    setIsLoading(true);
     setGameStarted(false);
     
     try {
-      const res = await fetch(`/api/tracks?url=${encodeURIComponent(playlistUrl)}`);
+      setDebugInfo(`Step 1: Making request to /api/tracks with URL: ${playlistUrl}`);
+      
+      const apiUrl = `/api/tracks?url=${encodeURIComponent(playlistUrl)}`;
+      setDebugInfo(prev => prev + `\nStep 2: Full API URL: ${apiUrl}`);
+      
+      const res = await fetch(apiUrl);
+      setDebugInfo(prev => prev + `\nStep 3: Response status: ${res.status}`);
+      
       const data = await res.json();
+      setDebugInfo(prev => prev + `\nStep 4: Response data: ${JSON.stringify(data, null, 2)}`);
       
       if (data.error) {
-        setMessage(data.error);
+        setMessage(`Error: ${data.error}`);
+        setIsLoading(false);
         return;
       }
       
-      if (!data.length) {
+      if (!Array.isArray(data)) {
+        setMessage("Invalid response format from API");
+        setDebugInfo(prev => prev + `\nError: Expected array, got ${typeof data}`);
+        setIsLoading(false);
+        return;
+      }
+      
+      if (data.length === 0) {
         setMessage("No tracks with previews found in this playlist.");
+        setIsLoading(false);
         return;
       }
       
       setTracks(data);
       setGameStarted(true);
-      setMessage("");
+      setMessage(`Loaded ${data.length} tracks successfully!`);
+      setDebugInfo(prev => prev + `\nSuccess: ${data.length} tracks loaded`);
       resetGame();
     } catch (error) {
-      setMessage("Error loading playlist. Please check the URL.");
+      setMessage(`Network error: ${error.message}`);
+      setDebugInfo(prev => prev + `\nNetwork Error: ${error.message}`);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -139,7 +179,6 @@ function App() {
 
   const nextTrack = () => {
     if (currentTrack + 1 >= tracks.length) {
-      // Game over
       setGameStarted(false);
       setMessage(`Game Over! Final Score: ${score}`);
       return;
@@ -171,9 +210,9 @@ function App() {
   if (!gameStarted) {
     return (
       <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center p-4">
-        <div className="max-w-md w-full text-center space-y-6">
+        <div className="max-w-2xl w-full text-center space-y-6">
           <div className="space-y-2">
-            <h1 className="text-4xl font-bold text-green-400">🎵 Songless</h1>
+            <h1 className="text-4xl font-bold text-green-400">🎵 AudioWhiz</h1>
             <p className="text-gray-300">Guess the song from your Spotify playlist</p>
           </div>
           
@@ -181,21 +220,46 @@ function App() {
             <input
               className="w-full p-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-green-400"
               type="text"
-              placeholder="Paste Spotify playlist link"
+              placeholder="Paste Spotify playlist link (e.g., https://open.spotify.com/playlist/...)"
               value={playlistUrl}
               onChange={(e) => setPlaylistUrl(e.target.value)}
             />
-            <button
-              className="w-full p-3 bg-green-500 hover:bg-green-600 rounded-lg font-semibold transition-colors"
-              onClick={fetchTracks}
-              disabled={!playlistUrl}
-            >
-              Start Game
-            </button>
+            
+            <div className="flex gap-4">
+              <button
+                className="flex-1 p-3 bg-blue-500 hover:bg-blue-600 rounded-lg font-semibold transition-colors"
+                onClick={testAPI}
+              >
+                Test API
+              </button>
+              <button
+                className="flex-1 p-3 bg-green-500 hover:bg-green-600 rounded-lg font-semibold transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed"
+                onClick={fetchTracks}
+                disabled={!playlistUrl.trim() || isLoading}
+              >
+                {isLoading ? "Loading..." : "Start Game"}
+              </button>
+            </div>
           </div>
+
+          {/* Debug Info */}
+          {debugInfo && (
+            <div className="bg-gray-800 p-4 rounded-lg text-left">
+              <h3 className="text-green-400 font-bold mb-2">Debug Info:</h3>
+              <pre className="text-sm text-gray-300 whitespace-pre-wrap overflow-x-auto">
+                {debugInfo}
+              </pre>
+            </div>
+          )}
           
           {message && (
-            <p className="text-gray-300">{message}</p>
+            <div className={`p-3 rounded-lg ${
+              message.includes('Error') || message.includes('error') 
+                ? 'bg-red-900 text-red-300' 
+                : 'bg-green-900 text-green-300'
+            }`}>
+              {message}
+            </div>
           )}
           
           {score > 0 && (
@@ -203,6 +267,17 @@ function App() {
               <h3 className="text-xl font-bold text-green-400">Final Score: {score}</h3>
             </div>
           )}
+
+          {/* Instructions */}
+          <div className="bg-gray-800 p-4 rounded-lg text-left">
+            <h3 className="text-green-400 font-bold mb-2">How to use:</h3>
+            <ol className="text-sm text-gray-300 space-y-1">
+              <li>1. Go to Spotify and find a public playlist</li>
+              <li>2. Copy the playlist URL (should start with https://open.spotify.com/playlist/)</li>
+              <li>3. Paste it above and click "Start Game"</li>
+              <li>4. If it doesn't work, click "Test API" first to check connection</li>
+            </ol>
+          </div>
         </div>
       </div>
     );
@@ -224,7 +299,7 @@ function App() {
     <div className="min-h-screen bg-gray-900 text-white">
       {/* Header */}
       <div className="text-center py-6 border-b border-gray-800">
-        <h1 className="text-3xl font-bold">Songless</h1>
+        <h1 className="text-3xl font-bold">AudioWhiz</h1>
         <div className="mt-2 text-gray-300">
           Score: {score} | Track {currentTrack + 1} / {tracks.length}
         </div>
