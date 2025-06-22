@@ -47,7 +47,7 @@ function App() {
   if (!gameStarted) {
     return (
       <div style={{ maxWidth: 400, margin: "50px auto", textAlign: "center" }}>
-        <h1>🎵 Guessify 🎵</h1>
+        <h1>🎵 AudioWhiz🎵</h1>
         <input
           style={{ width: "80%" }}
           type="text"
