@@ -1,11 +1,5 @@
 require('dotenv').config();
-const express = require('express');
 const fetch = require('node-fetch');
-const cors = require('cors');
-
-const app = express();
-app.use(cors());
-app.use(express.json());
 
 let accessToken = null;
 let tokenExpiresAt = 0;
@@ -52,11 +46,10 @@ async function getSpotifyToken() {
 function extractPlaylistId(url) {
   console.log('Input URL:', url);
   
-  // Handle different URL formats
   const patterns = [
     /playlist\/([a-zA-Z0-9]+)/,
     /playlist:([a-zA-Z0-9]+)/,
-    /^([a-zA-Z0-9]+)$/ // Just the ID
+    /^([a-zA-Z0-9]+)$/
   ];
   
   for (const pattern of patterns) {
@@ -71,7 +64,21 @@ function extractPlaylistId(url) {
   return null;
 }
 
-app.get('/api/tracks', async (req, res) => {
+export default async function handler(req, res) {
+  // Enable CORS
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
+
+  if (req.method !== 'GET') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
   try {
     const playlistUrl = req.query.url;
     console.log('=== NEW REQUEST ===');
@@ -163,28 +170,4 @@ app.get('/api/tracks', async (req, res) => {
       error: 'Server error: ' + error.message 
     });
   }
-});
-
-// Test endpoint to check if API is working
-app.get('/api/test', (req, res) => {
-  res.json({ 
-    status: 'API is working',
-    timestamp: new Date().toISOString(),
-    env: {
-      clientId: process.env.SPOTIFY_CLIENT_ID ? 'Present' : 'Missing',
-      clientSecret: process.env.SPOTIFY_CLIENT_SECRET ? 'Present' : 'Missing'
-    }
-  });
-});
-
-// Health check endpoint
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'OK', timestamp: new Date().toISOString() });
-});
-
-// For local development
-if (process.env.NODE_ENV !== "production") {
-  app.listen(4000, () => console.log('API running on http://localhost:4000'));
 }
-
-module.exports = app;
